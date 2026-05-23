@@ -1,0 +1,40 @@
+services:
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: server
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      PORT: ${SERVER_PORT}
+      CLIENT_ORIGIN: ${CLIENT_ORIGIN}
+    ports:
+      - "${SERVER_HOST_PORT}:4000"
+    volumes:
+      - sqlite-data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:4000/api/health', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  client:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: client
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL}
+    environment:
+      INTERNAL_API_URL: ${INTERNAL_API_URL}
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+      NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL}
+    ports:
+      - "${CLIENT_HOST_PORT}:3000"
+    depends_on:
+      server:
+        condition: service_healthy
+
+volumes:
+  sqlite-data:

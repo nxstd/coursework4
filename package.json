@@ -1,0 +1,35 @@
+{
+  "name": "digital-card-platform",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "client"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w client",
+    "server:dev": "cd server && uv run fastapi dev app/main.py --host 0.0.0.0 --port 4000",
+    "server:migrate": "cd server && uv run python -m app.migrate",
+    "server:seed": "cd server && uv run python -m app.seed",
+    "server:test": "cd server && uv run pytest",
+    "server:lint": "cd server && uv run ruff check .",
+    "build": "npm run build -w client",
+    "lint": "npm run lint -w client && npm run server:lint",
+    "typecheck": "npm run typecheck -w client",
+    "test": "npm run test -w client && npm run server:test"
+  },
+  "engines": {
+    "node": ">=26.0.0"
+  },
+  "overrides": {
+    "@hono/node-server": "2.0.2",
+    "picomatch": "4.0.4",
+    "micromatch": {
+      "picomatch": "4.0.4"
+    },
+    "postcss": "8.5.14"
+  },
+  "devDependencies": {
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6"
+  }
+}

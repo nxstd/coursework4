@@ -1,0 +1,65 @@
+# Dependencies
+node_modules
+client/node_modules
+server/node_modules
+
+# Build artifacts
+.next
+dist
+build
+.venv
+__pycache__
+.pytest_cache
+.ruff_cache
+client/.next
+server/.venv
+server/__pycache__
+server/.pytest_cache
+server/.ruff_cache
+
+# Version control & IDE
+.git
+.gitignore
+.idea
+.vscode
+.env
+.env.local
+.env.*.local
+.env.production
+.env.development
+
+# Logs
+*.log
+logs/
+
+# Database
+server/dev.db
+server/dev.db-*
+*.db
+*.sqlite
+*.sqlite3
+*.zip
+project-snapshot.txt
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Documentation
+README.md
+*.md
+
+# Testing
+.coverage
+.nyc_output
+coverage
+playwright-report
+test-results
+
+# Report assets
+report-assets/screenshots
+
+# Docker
+Dockerfile
+docker-compose*.yml
+.dockerignore
