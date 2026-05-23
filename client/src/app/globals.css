@@ -1,0 +1,60 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ink: #101820;
+  --color-mint: #5dd9a7;
+  --color-coral: #ff6f61;
+}
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 12% 8%, rgba(93, 217, 167, 0.18), transparent 26rem),
+    radial-gradient(circle at 88% 16%, rgba(255, 111, 97, 0.12), transparent 24rem),
+    linear-gradient(135deg, #f8faf7 0%, #eef6f1 46%, #f7f1ee 100%);
+  color: #101820;
+  font-family:
+    "Manrope",
+    "Segoe UI",
+    system-ui,
+    sans-serif;
+}
+
+@layer components {
+  .surface {
+    @apply rounded-lg border border-ink/10 bg-white/80 shadow-sm backdrop-blur;
+  }
+
+  .surface-hover {
+    @apply transition duration-200 hover:-translate-y-0.5 hover:border-ink/20 hover:bg-white hover:shadow-md;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-md bg-mint px-5 py-3 text-sm font-black text-ink transition hover:bg-mint/85 focus:outline-none focus:ring-4 focus:ring-mint/30 disabled:cursor-not-allowed disabled:opacity-60;
+    color: #101820;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-md border border-ink/15 bg-white/60 px-4 py-2 text-sm font-semibold text-ink transition hover:border-ink/30 hover:bg-white focus:outline-none focus:ring-4 focus:ring-mint/20 disabled:cursor-not-allowed disabled:opacity-60;
+  }
+
+  .btn-danger {
+    @apply inline-flex items-center justify-center gap-2 rounded-md border border-coral/30 bg-white/50 px-4 py-2 text-sm font-semibold text-coral transition hover:bg-coral/10 focus:outline-none focus:ring-4 focus:ring-coral/15 disabled:cursor-not-allowed disabled:opacity-60;
+  }
+
+  .btn-icon {
+    @apply inline-flex h-10 w-10 items-center justify-center rounded-md border border-ink/10 bg-white/65 text-ink transition hover:border-ink/25 hover:bg-white focus:outline-none focus:ring-4 focus:ring-mint/20 disabled:cursor-not-allowed disabled:opacity-60;
+  }
+
+  .field {
+    @apply h-11 w-full min-w-0 rounded-md border border-ink/15 bg-white/90 px-4 text-sm outline-none transition placeholder:text-ink/30 hover:border-ink/25 focus:border-mint focus:ring-4 focus:ring-mint/20;
+  }
+
+  .field-area {
+    @apply min-h-28 w-full min-w-0 rounded-md border border-ink/15 bg-white/90 px-4 py-3 text-sm outline-none transition placeholder:text-ink/30 hover:border-ink/25 focus:border-mint focus:ring-4 focus:ring-mint/20;
+  }
+}

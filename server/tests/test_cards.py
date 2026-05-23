@@ -1,0 +1,105 @@
+from collections.abc import Generator
+
+import pytest
+from fastapi.testclient import TestClient
+from sqlmodel import Session, SQLModel, create_engine
+
+from app.database import get_session
+from app.main import app
+
+
+@pytest.fixture()
+def client(tmp_path) -> Generator[TestClient]:
+    engine = create_engine(
+        f"sqlite:///{tmp_path / 'test.db'}",
+        connect_args={"check_same_thread": False},
+    )
+    SQLModel.metadata.create_all(engine)
+
+    def override_session() -> Generator[Session]:
+        with Session(engine) as session:
+            yield session
+
+    app.dependency_overrides[get_session] = override_session
+    with TestClient(app) as test_client:
+        yield test_client
+    app.dependency_overrides.clear()
+
+
+def test_get_cards_returns_business_cards(client: TestClient) -> None:
+    client.post("/api/cards", json={"slug": "jordan-lee", "fullName": "Jordan Lee"})
+    client.post("/api/cards", json={"slug": "mira-stone", "fullName": "Mira Stone"})
+
+    response = client.get("/api/cards")
+
+    assert response.status_code == 200
+    names = sorted(card["fullName"] for card in response.json()["data"])
+    assert names == ["Jordan Lee", "Mira Stone"]
+
+
+def test_post_cards_creates_business_card_with_social_links(client: TestClient) -> None:
+    response = client.post(
+        "/api/cards",
+        json={
+            "slug": "jordan-lee",
+            "fullName": "Jordan Lee",
+            "jobTitle": "Founder",
+            "socialLinks": [{"platform": "linkedin", "url": "https://linkedin.com/in/jordanlee"}],
+        },
+    )
+
+    body = response.json()
+    assert response.status_code == 201
+    assert body["data"]["slug"] == "jordan-lee"
+    assert body["data"]["socialLinks"][0]["platform"] == "linkedin"
+
+
+def test_get_card_by_slug_returns_business_card(client: TestClient) -> None:
+    created = client.post(
+        "/api/cards",
+        json={"slug": "mira-stone", "fullName": "Mira Stone"},
+    ).json()
+
+    response = client.get("/api/cards/slug/mira-stone")
+
+    assert response.status_code == 200
+    assert response.json()["data"]["id"] == created["data"]["id"]
+
+
+def test_patch_and_delete_card(client: TestClient) -> None:
+    created = client.post("/api/cards", json={"slug": "casey-ng", "fullName": "Casey Ng"}).json()
+    card_id = created["data"]["id"]
+
+    updated = client.patch(
+        f"/api/cards/{card_id}",
+        json={
+            "company": "Signal Works",
+            "socialLinks": [{"platform": "github", "url": "https://github.com/caseyng"}],
+        },
+    )
+    deleted = client.delete(f"/api/cards/{card_id}")
+    missing = client.get(f"/api/cards/{card_id}")
+
+    assert updated.status_code == 200
+    assert updated.json()["data"]["company"] == "Signal Works"
+    assert deleted.status_code == 204
+    assert missing.status_code == 404
+
+
+def test_validation_and_conflict_errors(client: TestClient) -> None:
+    invalid = client.post("/api/cards", json={"slug": "", "fullName": "No Slug"})
+    invalid_slug = client.post("/api/cards", json={"slug": "bad slug", "fullName": "Bad Slug"})
+    client.post("/api/cards", json={"slug": "unique-card", "fullName": "Unique Card"})
+    duplicate = client.post(
+        "/api/cards",
+        json={"slug": "unique-card", "fullName": "Duplicate Card"},
+    )
+
+    assert invalid.status_code == 400
+    assert invalid.json()["error"]["message"] == "slug is required"
+    assert invalid_slug.status_code == 400
+    assert invalid_slug.json()["error"]["message"] == (
+        "slug may contain only latin letters, digits and hyphens"
+    )
+    assert duplicate.status_code == 409
+    assert duplicate.json()["error"]["message"] == "Slug is already in use"
