@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-FROM ghcr.io/astral-sh/uv:python3.14-alpine AS server
+FROM ghcr.io/astral-sh/uv:python3.13-alpine AS server
 WORKDIR /app/server
 
 ENV PYTHONUNBUFFERED=1
@@ -12,19 +12,21 @@ ENV CLIENT_ORIGIN=http://localhost:3000
 ENV PORT=4000
 
 COPY server/pyproject.toml server/uv.lock ./
-RUN uv sync --frozen --no-dev
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev
 
 COPY server/app app
 
 EXPOSE 4000
 CMD ["sh", "-c", "python -m app.migrate && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-4000}"]
 
-FROM node:alpine AS client-build
+FROM node:26-alpine AS client-build
 WORKDIR /app
 
 COPY package*.json ./
 COPY client/package.json client/package.json
-RUN npm ci
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci
 
 COPY client client
 
@@ -36,7 +38,7 @@ ENV INTERNAL_API_URL=http://server:4000
 
 RUN npm run build -w client
 
-FROM node:alpine AS client
+FROM node:26-alpine AS client
 WORKDIR /app
 
 ENV NODE_ENV=production
