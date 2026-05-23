@@ -105,6 +105,18 @@ jobs:
           echo "client=ghcr.io/${repository}/client" >> "$GITHUB_OUTPUT"
           echo "server=ghcr.io/${repository}/server" >> "$GITHUB_OUTPUT"
 
+      - name: Prepare client build URL
+        id: build-url
+        shell: bash
+        run: |
+          if [ "${GITHUB_EVENT_NAME}" = "push" ]; then
+            echo "public_url=https://${DEPLOY_DOMAIN}" >> "$GITHUB_OUTPUT"
+          else
+            echo "public_url=http://localhost" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          DEPLOY_DOMAIN: ${{ secrets.DEPLOY_DOMAIN }}
+
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v4
 
@@ -124,7 +136,7 @@ jobs:
           tags: |
             type=ref,event=branch
             type=ref,event=pr
-            type=sha,prefix=sha-
+            type=sha,prefix=sha-,format=long
             type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Server metadata
@@ -135,7 +147,7 @@ jobs:
           tags: |
             type=ref,event=branch
             type=ref,event=pr
-            type=sha,prefix=sha-
+            type=sha,prefix=sha-,format=long
             type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build and push client image
@@ -148,8 +160,8 @@ jobs:
           tags: ${{ steps.client-meta.outputs.tags }}
           labels: ${{ steps.client-meta.outputs.labels }}
           build-args: |
-            NEXT_PUBLIC_API_URL=http://localhost:8080
-            NEXT_PUBLIC_SITE_URL=http://localhost
+            NEXT_PUBLIC_API_URL=${{ steps.build-url.outputs.public_url }}
+            NEXT_PUBLIC_SITE_URL=${{ steps.build-url.outputs.public_url }}
           cache-from: type=gha,scope=client
           cache-to: type=gha,scope=client,mode=max
 
@@ -164,3 +176,99 @@ jobs:
           labels: ${{ steps.server-meta.outputs.labels }}
           cache-from: type=gha,scope=server
           cache-to: type=gha,scope=server,mode=max
+
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    needs:
+      - docker
+    if: github.event_name == 'push'
+
+    steps:
+      - name: Prepare deployment values
+        id: deploy
+        shell: bash
+        run: |
+          repository="${GITHUB_REPOSITORY,,}"
+          echo "client_image=ghcr.io/${repository}/client:sha-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          echo "server_image=ghcr.io/${repository}/server:sha-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Configure SSH
+        shell: bash
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -p "$SSH_PORT" "$SSH_HOST" >> ~/.ssh/known_hosts
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Deploy containers
+        shell: bash
+        run: |
+          printf '%s' "$DEPLOY_CADDYFILE" > caddyfile.deploy
+          printf '%s' "$DEPLOY_COMPOSE_FILE" > compose.deploy.yml
+
+          scp -i ~/.ssh/deploy_key -P "$SSH_PORT" caddyfile.deploy compose.deploy.yml "$SSH_USER@$SSH_HOST:/tmp/"
+
+          ssh -i ~/.ssh/deploy_key -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" \
+            DEPLOY_DOMAIN="$DEPLOY_DOMAIN" \
+            CLIENT_IMAGE="$CLIENT_IMAGE" \
+            SERVER_IMAGE="$SERVER_IMAGE" \
+            'bash -se' <<'REMOTE'
+          set -euo pipefail
+
+          app_dir="$HOME/digital-card-platform"
+          mkdir -p "$app_dir"
+          cd "$app_dir"
+
+          install -m 600 /tmp/caddyfile.deploy Caddyfile
+          install -m 600 /tmp/compose.deploy.yml compose.yml
+          rm -f /tmp/caddyfile.deploy /tmp/compose.deploy.yml
+
+          if docker info >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
+            docker_cmd=(docker)
+          elif sudo -n docker info >/dev/null 2>&1 && sudo -n docker compose version >/dev/null 2>&1; then
+            docker_cmd=(sudo docker)
+          else
+            echo "Docker with the Compose plugin is not available for ${USER}. Add the user to the docker group, allow passwordless sudo for docker, or install the Docker Compose plugin." >&2
+            exit 1
+          fi
+
+          cat > .env <<ENV
+          DOMAIN=${DEPLOY_DOMAIN}
+          DATABASE_URL=sqlite:////data/prod.db
+          SERVER_PORT=4000
+          CLIENT_ORIGIN=https://${DEPLOY_DOMAIN}
+          INTERNAL_API_URL=http://server:4000
+          NEXT_PUBLIC_API_URL=https://${DEPLOY_DOMAIN}
+          NEXT_PUBLIC_SITE_URL=https://${DEPLOY_DOMAIN}
+          CLIENT_IMAGE=${CLIENT_IMAGE}
+          SERVER_IMAGE=${SERVER_IMAGE}
+          ENV
+
+          chmod 600 .env Caddyfile compose.yml
+          "${docker_cmd[@]}" compose -f compose.yml --env-file .env pull
+          "${docker_cmd[@]}" compose -f compose.yml --env-file .env up -d --remove-orphans
+          "${docker_cmd[@]}" compose -f compose.yml --env-file .env ps
+          "${docker_cmd[@]}" image prune -f
+          REMOTE
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          DEPLOY_DOMAIN: ${{ secrets.DEPLOY_DOMAIN }}
+          DEPLOY_CADDYFILE: ${{ secrets.DEPLOY_CADDYFILE }}
+          DEPLOY_COMPOSE_FILE: ${{ secrets.DEPLOY_COMPOSE_FILE }}
+          CLIENT_IMAGE: ${{ steps.deploy.outputs.client_image }}
+          SERVER_IMAGE: ${{ steps.deploy.outputs.server_image }}
+
+      - name: Verify deployment
+        shell: bash
+        run: |
+          curl --fail --silent --show-error --max-time 60 "https://${DEPLOY_DOMAIN}/api/health"
+          curl --fail --silent --show-error --max-time 60 --output /dev/null "https://${DEPLOY_DOMAIN}/"
+        env:
+          DEPLOY_DOMAIN: ${{ secrets.DEPLOY_DOMAIN }}
