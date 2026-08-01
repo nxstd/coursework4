@@ -1,20 +1,31 @@
+import os
 from collections.abc import Generator
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import delete
 from sqlmodel import Session, SQLModel, create_engine
 
 from app.database import get_session
 from app.main import app
+from app.models import BusinessCard, SocialLink
 
 
 @pytest.fixture()
 def client(tmp_path) -> Generator[TestClient]:
-    engine = create_engine(
-        f"sqlite:///{tmp_path / 'test.db'}",
-        connect_args={"check_same_thread": False},
-    )
-    SQLModel.metadata.create_all(engine)
+    database_url = os.environ.get("TEST_DATABASE_URL")
+    if database_url:
+        engine = create_engine(database_url)
+        with Session(engine) as session:
+            session.exec(delete(SocialLink))
+            session.exec(delete(BusinessCard))
+            session.commit()
+    else:
+        engine = create_engine(
+            f"sqlite:///{tmp_path / 'test.db'}",
+            connect_args={"check_same_thread": False},
+        )
+        SQLModel.metadata.create_all(engine)
 
     def override_session() -> Generator[Session]:
         with Session(engine) as session:
@@ -24,6 +35,12 @@ def client(tmp_path) -> Generator[TestClient]:
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
+    if database_url:
+        with Session(engine) as session:
+            session.exec(delete(SocialLink))
+            session.exec(delete(BusinessCard))
+            session.commit()
+    engine.dispose()
 
 
 def test_get_cards_returns_business_cards(client: TestClient) -> None:
@@ -66,6 +83,18 @@ def test_get_card_by_slug_returns_business_card(client: TestClient) -> None:
     assert response.json()["data"]["id"] == created["data"]["id"]
 
 
+def test_get_card_by_id_returns_business_card(client: TestClient) -> None:
+    created = client.post(
+        "/api/cards",
+        json={"slug": "riley-park", "fullName": "Riley Park"},
+    ).json()["data"]
+
+    response = client.get(f"/api/cards/{created['id']}")
+
+    assert response.status_code == 200
+    assert response.json()["data"]["slug"] == "riley-park"
+
+
 def test_patch_and_delete_card(client: TestClient) -> None:
     created = client.post("/api/cards", json={"slug": "casey-ng", "fullName": "Casey Ng"}).json()
     card_id = created["data"]["id"]
@@ -103,3 +132,26 @@ def test_validation_and_conflict_errors(client: TestClient) -> None:
     )
     assert duplicate.status_code == 409
     assert duplicate.json()["error"]["message"] == "Slug is already in use"
+
+
+def test_missing_card_operations_return_not_found(client: TestClient) -> None:
+    missing_get = client.get("/api/cards/missing-id")
+    missing_update = client.patch("/api/cards/missing-id", json={"company": "Acme"})
+    missing_delete = client.delete("/api/cards/missing-id")
+
+    assert missing_get.status_code == 404
+    assert missing_update.status_code == 404
+    assert missing_delete.status_code == 404
+
+
+def test_update_rejects_duplicate_slug(client: TestClient) -> None:
+    client.post("/api/cards", json={"slug": "first-card", "fullName": "First Card"})
+    second = client.post(
+        "/api/cards",
+        json={"slug": "second-card", "fullName": "Second Card"},
+    ).json()["data"]
+
+    response = client.patch(f"/api/cards/{second['id']}", json={"slug": "first-card"})
+
+    assert response.status_code == 409
+    assert response.json()["error"]["message"] == "Slug is already in use"

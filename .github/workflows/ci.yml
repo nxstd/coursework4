@@ -58,6 +58,25 @@ jobs:
     name: Server
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: digital_cards_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d digital_cards_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/digital_cards_test
+      TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/digital_cards_test
+
     defaults:
       run:
         working-directory: server
@@ -79,6 +98,9 @@ jobs:
 
       - name: Install dependencies
         run: uv sync --locked
+
+      - name: Apply database migrations
+        run: uv run alembic upgrade head
 
       - name: Lint
         run: uv run ruff check .
@@ -182,7 +204,7 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - docker
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' && vars.ENABLE_DEPLOYMENT == 'true'
 
     steps:
       - name: Prepare deployment values
@@ -208,8 +230,10 @@ jobs:
       - name: Deploy containers
         shell: bash
         run: |
+          : "${DEPLOY_DATABASE_URL:?DEPLOY_DATABASE_URL secret is required}"
           printf '%s' "$DEPLOY_CADDYFILE" > caddyfile.deploy
           printf '%s' "$DEPLOY_COMPOSE_FILE" > compose.deploy.yml
+          deploy_database_url_b64="$(printf '%s' "$DEPLOY_DATABASE_URL" | base64 -w 0)"
 
           scp -i ~/.ssh/deploy_key -P "$SSH_PORT" caddyfile.deploy compose.deploy.yml "$SSH_USER@$SSH_HOST:/tmp/"
 
@@ -217,12 +241,14 @@ jobs:
             DEPLOY_DOMAIN="$DEPLOY_DOMAIN" \
             CLIENT_IMAGE="$CLIENT_IMAGE" \
             SERVER_IMAGE="$SERVER_IMAGE" \
+            DEPLOY_DATABASE_URL_B64="$deploy_database_url_b64" \
             'bash -se' <<'REMOTE'
           set -euo pipefail
 
           app_dir="$HOME/digital-card-platform"
           mkdir -p "$app_dir"
           cd "$app_dir"
+          database_url="$(printf '%s' "$DEPLOY_DATABASE_URL_B64" | base64 --decode)"
 
           install -m 600 /tmp/caddyfile.deploy Caddyfile
           install -m 600 /tmp/compose.deploy.yml compose.yml
@@ -239,7 +265,7 @@ jobs:
 
           cat > .env <<ENV
           DOMAIN=${DEPLOY_DOMAIN}
-          DATABASE_URL=sqlite:////data/prod.db
+          DATABASE_URL=${database_url}
           SERVER_PORT=4000
           CLIENT_ORIGIN=https://${DEPLOY_DOMAIN}
           INTERNAL_API_URL=http://server:4000
@@ -262,6 +288,7 @@ jobs:
           DEPLOY_DOMAIN: ${{ secrets.DEPLOY_DOMAIN }}
           DEPLOY_CADDYFILE: ${{ secrets.DEPLOY_CADDYFILE }}
           DEPLOY_COMPOSE_FILE: ${{ secrets.DEPLOY_COMPOSE_FILE }}
+          DEPLOY_DATABASE_URL: ${{ secrets.DEPLOY_DATABASE_URL }}
           CLIENT_IMAGE: ${{ steps.deploy.outputs.client_image }}
           SERVER_IMAGE: ${{ steps.deploy.outputs.server_image }}
 
