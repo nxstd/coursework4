@@ -1,5 +1,4 @@
 import re
-from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from typing import Annotated
 
@@ -12,20 +11,18 @@ from sqlalchemy.orm import selectinload
 from sqlmodel import Session, select
 
 from app.config import settings
-from app.database import create_db_and_tables, get_session
+from app.database import get_session
 from app.models import BusinessCard, SocialLink
 from app.schemas import BusinessCardInput, BusinessCardRead, SocialLinkInput
 
 SLUG_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
 
-@asynccontextmanager
-async def lifespan(_app: FastAPI):
-    create_db_and_tables()
-    yield
-
-
-app = FastAPI(title="Digital Card Platform API", lifespan=lifespan)
+app = FastAPI(
+    title="Digital Card Platform API",
+    description="REST API for creating and publishing digital business cards.",
+    version="1.0.0",
+)
 SessionDep = Annotated[Session, Depends(get_session)]
 
 app.add_middleware(

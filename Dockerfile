@@ -7,7 +7,6 @@ ENV PYTHONUNBUFFERED=1
 ENV UV_COMPILE_BYTECODE=1
 ENV UV_LINK_MODE=copy
 ENV PATH="/app/server/.venv/bin:${PATH}"
-ENV DATABASE_URL=sqlite:////data/prod.db
 ENV CLIENT_ORIGIN=http://localhost:3000
 ENV PORT=4000
 
@@ -16,9 +15,17 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev
 
 COPY server/app app
+COPY server/alembic.ini ./
+COPY server/migrations migrations
 
 EXPOSE 4000
-CMD ["sh", "-c", "python -m app.migrate && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-4000}"]
+CMD ["sh", "-c", "python -m app.wait_for_db && alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-4000}"]
+
+FROM server AS server-test
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen
+COPY server/tests tests
+CMD ["pytest"]
 
 FROM node:26-alpine AS client-build
 WORKDIR /app
@@ -34,7 +41,7 @@ ARG NEXT_PUBLIC_API_URL=http://localhost:4000
 ARG NEXT_PUBLIC_SITE_URL=http://localhost:3000
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 ENV NEXT_PUBLIC_SITE_URL=${NEXT_PUBLIC_SITE_URL}
-ENV INTERNAL_API_URL=http://server:4000
+ENV INTERNAL_API_URL=http://backend:4000
 
 RUN npm run build -w client
 

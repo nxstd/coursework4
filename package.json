@@ -8,7 +8,7 @@
   "scripts": {
     "dev": "npm run dev -w client",
     "server:dev": "cd server && uv run fastapi dev app/main.py --host 0.0.0.0 --port 4000",
-    "server:migrate": "cd server && uv run python -m app.migrate",
+    "server:migrate": "cd server && uv run alembic upgrade head",
     "server:seed": "cd server && uv run python -m app.seed",
     "server:test": "cd server && uv run pytest",
     "server:lint": "cd server && uv run ruff check .",
@@ -26,7 +26,7 @@
     "micromatch": {
       "picomatch": "4.0.4"
     },
-    "postcss": "8.5.14"
+    "postcss": "8.5.25"
   },
   "devDependencies": {
     "react": "^19.2.6",

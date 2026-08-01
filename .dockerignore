@@ -23,6 +23,9 @@ server/.ruff_cache
 .idea
 .vscode
 .env
+.env.*
+!.env.example
+!**/.env.example
 .env.local
 .env.*.local
 .env.production
@@ -39,6 +42,8 @@ server/dev.db-*
 *.sqlite
 *.sqlite3
 *.zip
+*.pem
+*.key
 project-snapshot.txt
 
 # OS

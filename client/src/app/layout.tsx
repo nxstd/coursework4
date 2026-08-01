@@ -5,8 +5,8 @@ import { SiteHeader } from "@/components/site-header";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Цифровые визитки",
-  description: "Создавайте и редактируйте цифровые визитки"
+  title: "Digital Card Platform",
+  description: "Create, manage, and share digital business cards"
 };
 
 export default function RootLayout({
@@ -24,7 +24,7 @@ export default function RootLayout({
             <div>
               <p className="inline-flex items-center gap-2 font-black text-ink">
                 <ShieldCheck size={18} className="text-mint" />
-                Цифровые визитки
+                Digital Card Platform
               </p>
               <p className="mt-2 max-w-xl">Клиентская часть сервиса для создания и управления публичными визитками</p>
               <p className="mt-4">© 2026 Digital Card Platform</p>

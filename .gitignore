@@ -29,15 +29,24 @@ logs/
 project-snapshot.txt
 
 .env
+.env.*
+!.env.example
+!**/.env.example
 .env.local
 .env.*.local
 .env.production
 .env.development
 
 coverage/
+htmlcov/
+.coverage
+.coverage.*
 playwright-report/
 test-results/
 report-assets/screenshots/
+
+*.pem
+*.key
 
 .idea/
 .vscode/
