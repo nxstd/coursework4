@@ -1,6 +1,6 @@
 from sqlmodel import Session, select
 
-from app.database import create_db_and_tables, engine
+from app.database import engine
 from app.main import build_social_links
 from app.models import BusinessCard
 
@@ -56,7 +56,6 @@ cards = [
 
 
 def main() -> None:
-    create_db_and_tables()
     with Session(engine) as session:
         for data in cards:
             card_data = data.copy()

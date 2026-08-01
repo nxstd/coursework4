@@ -1,6 +1,7 @@
 from datetime import UTC, datetime
 from uuid import uuid4
 
+from sqlalchemy import DateTime
 from sqlmodel import Field, Relationship, SQLModel
 
 
@@ -19,9 +20,13 @@ class SocialLink(SQLModel, table=True):
     platform: str
     url: str
     label: str | None = None
-    businessCardId: str = Field(foreign_key="BusinessCard.id", index=True)
-    createdAt: datetime = Field(default_factory=now)
-    updatedAt: datetime = Field(default_factory=now)
+    businessCardId: str = Field(
+        foreign_key="BusinessCard.id",
+        index=True,
+        ondelete="CASCADE",
+    )
+    createdAt: datetime = Field(default_factory=now, sa_type=DateTime(timezone=True))
+    updatedAt: datetime = Field(default_factory=now, sa_type=DateTime(timezone=True))
 
     businessCard: "BusinessCard" = Relationship(back_populates="socialLinks")
 
@@ -40,8 +45,12 @@ class BusinessCard(SQLModel, table=True):
     website: str | None = None
     location: str | None = None
     avatarUrl: str | None = None
-    createdAt: datetime = Field(default_factory=now, index=True)
-    updatedAt: datetime = Field(default_factory=now)
+    createdAt: datetime = Field(
+        default_factory=now,
+        index=True,
+        sa_type=DateTime(timezone=True),
+    )
+    updatedAt: datetime = Field(default_factory=now, sa_type=DateTime(timezone=True))
 
     socialLinks: list[SocialLink] = Relationship(
         back_populates="businessCard",
