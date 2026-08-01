@@ -22,7 +22,7 @@ export function SiteHeader() {
           <span className="grid h-9 w-9 place-items-center rounded-md bg-mint text-ink">
             <CreditCard size={18} strokeWidth={2.5} />
           </span>
-          Визитки
+          Digital Card Platform
         </Link>
 
         <nav className="hidden items-center gap-2 text-sm font-medium text-ink/70 md:flex">
